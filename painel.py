@@ -36,19 +36,28 @@ def enviar_alerta_whatsapp(mensagem):
 
 @st.cache_data(ttl=60)
 def obter_precos():
-    ids = ','.join(MOEDAS.keys())
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=brl"
-    return requests.get(url).json()
+    try:
+        ids = ','.join(MOEDAS.keys())
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=brl"
+        response = requests.get(url)
+        return response.json() if response.status_code == 200 else {}
+    except:
+        return {}
 
 @st.cache_data(ttl=60)
 def historico(moeda):
-    url = f"https://api.coingecko.com/api/v3/coins/{moeda}/market_chart?vs_currency=brl&days=1"
-    r = requests.get(url).json()
-    preco = pd.DataFrame(r['prices'], columns=['timestamp', 'preco'])
-    preco['timestamp'] = pd.to_datetime(preco['timestamp'], unit='ms')
-    return preco
+    try:
+        url = f"https://api.coingecko.com/api/v3/coins/{moeda}/market_chart?vs_currency=brl&days=1"
+        r = requests.get(url).json()
+        preco = pd.DataFrame(r['prices'], columns=['timestamp', 'preco'])
+        preco['timestamp'] = pd.to_datetime(preco['timestamp'], unit='ms')
+        return preco
+    except:
+        return pd.DataFrame(columns=['timestamp', 'preco'])
 
 def gerar_dica(dados, nome):
+    if dados.empty:
+        return "⚠️ Sem dados suficientes para análise."
     ultimos = dados['preco'].tail(20)
     variacao = ultimos.pct_change().mean() * 100
     if variacao > 0.1:
@@ -74,14 +83,22 @@ dados = obter_precos()
 
 for chave, nome in MOEDAS.items():
     st.subheader(f"{nome} ({chave.upper()[:3]})")
+
+    if chave not in dados:
+        st.warning(f"❌ Dados não encontrados para {nome}. Pulei esta moeda.")
+        continue
+
     preco_atual = dados[chave]['brl']
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.metric("Preço Atual", f"R${preco_atual:,.2f}")
         graf = historico(chave)
-        st.line_chart(graf.rename(columns={"timestamp": "Data", "preco": nome}).set_index("Data"))
-        st.info(gerar_dica(graf, nome))
+        if graf.empty:
+            st.warning("Sem dados para exibir gráfico.")
+        else:
+            st.line_chart(graf.rename(columns={"timestamp": "Data", "preco": nome}).set_index("Data"))
+            st.info(gerar_dica(graf, nome))
 
     with col2:
         if st.button(f"Simular Compra de {nome}", key=chave):
