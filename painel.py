@@ -16,7 +16,6 @@ MOEDAS = {
     "cardano": "Cardano"
 }
 
-# Dados do Twilio atualizados
 ACCOUNT_SID = 'AC4dfcac3404262d6aef40880ca2e890d4'
 AUTH_TOKEN = '6651d0a3e28ec73ffcc091dc7ce449b2'
 NUMERO_DESTINO = 'whatsapp:+5521986539352'
@@ -40,19 +39,28 @@ def obter_precos():
         ids = ','.join(MOEDAS.keys())
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=brl"
         response = requests.get(url)
-        return response.json() if response.status_code == 200 else {}
-    except:
+        st.write(f"🔍 Status da API: {response.status_code}")
+        data = response.json() if response.status_code == 200 else {}
+        st.write("📦 Retorno da API:", data)
+        return data
+    except Exception as e:
+        st.error(f"Erro ao obter preços: {e}")
         return {}
 
 @st.cache_data(ttl=60)
 def historico(moeda):
     try:
         url = f"https://api.coingecko.com/api/v3/coins/{moeda}/market_chart?vs_currency=brl&days=1"
-        r = requests.get(url).json()
-        preco = pd.DataFrame(r['prices'], columns=['timestamp', 'preco'])
+        r = requests.get(url)
+        st.write(f"📊 Status histórico {moeda}: {r.status_code}")
+        r_json = r.json()
+        if 'prices' not in r_json:
+            return pd.DataFrame(columns=['timestamp', 'preco'])
+        preco = pd.DataFrame(r_json['prices'], columns=['timestamp', 'preco'])
         preco['timestamp'] = pd.to_datetime(preco['timestamp'], unit='ms')
         return preco
-    except:
+    except Exception as e:
+        st.error(f"Erro ao obter histórico de {moeda}: {e}")
         return pd.DataFrame(columns=['timestamp', 'preco'])
 
 def gerar_dica(dados, nome):
@@ -60,16 +68,16 @@ def gerar_dica(dados, nome):
         return "⚠️ Sem dados suficientes para análise."
     ultimos = dados['preco'].tail(20)
     variacao = ultimos.pct_change().mean() * 100
-    if variacao > 0.1:
-        mensagem = f"🔼 {nome}: Tendência de alta. Possível entrada curta."
+    if variacao > 0.15:
+        mensagem = f"🟢 Oportunidade de compra em {nome}: tendência de alta."
         enviar_alerta_whatsapp(mensagem)
         return mensagem
-    elif variacao < -0.1:
-        mensagem = f"🔽 {nome}: Tendência de queda. Evite entradas."
+    elif variacao < -0.15:
+        mensagem = f"🔴 Oportunidade de venda em {nome}: tendência de queda."
         enviar_alerta_whatsapp(mensagem)
         return mensagem
     else:
-        return f"⏸️ {nome}: Lateralizado. Aguarde confirmação."
+        return f"🟡 {nome}: mercado lateral. Sem sinal claro."
 
 def simular_compra(nome, preco):
     registro = pd.DataFrame([[nome, preco, pd.Timestamp.now()]], columns=['Moeda', 'Preço', 'Data'])
