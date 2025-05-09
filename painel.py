@@ -37,8 +37,10 @@ def enviar_alerta_whatsapp(mensagem):
 def obter_precos():
     try:
         ids = ','.join(MOEDAS.keys())
-       url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=brl&x_cg_demo_api_key=1"
-
+        url = (
+            f"https://api.coingecko.com/api/v3/simple/price?"
+            f"ids={ids}&vs_currencies=brl&x_cg_demo_api_key=1"
+        )
         response = requests.get(url)
         st.write(f"🔍 Status da API: {response.status_code}")
         data = response.json() if response.status_code == 200 else {}
